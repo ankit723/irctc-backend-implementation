@@ -72,7 +72,7 @@ Transactional operations require ACID guarantees, while logging requires high wr
 
 Train creation and analytics endpoints are **admin-protected APIs**.
 
-Before testing the project, the reviewer must create a super admin account from the terminal.
+Before testing the project, the reviewer must create a super admin account from the terminal. using `python manage.py createsuperuser`
 
 The admin account is required to:
 
