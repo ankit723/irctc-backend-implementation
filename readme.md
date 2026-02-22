@@ -2,10 +2,10 @@
 
 ## Overview
 
-This project is a simplified backend system inspired by IRCTC.
-It supports user authentication, train search, ticket booking, and analytics on most searched routes.
+This project is a simplified railway booking backend inspired by IRCTC.
+It demonstrates authentication, train search, ticket booking, concurrency-safe seat reservation, and analytics using a dual database architecture.
 
-The system demonstrates transactional consistency, concurrency control, and analytics logging using two different databases.
+The backend exposes REST APIs secured using JWT authentication and role-based permissions.
 
 ---
 
@@ -13,28 +13,30 @@ The system demonstrates transactional consistency, concurrency control, and anal
 
 * Backend: Django + Django REST Framework
 * Authentication: JWT (SimpleJWT)
-* Relational Database: SQLite/MySQL (Transactional data)
-* NoSQL Database: MongoDB (Search logs & analytics)
+* Relational Database: SQLite/MySQL (transactional data)
+* NoSQL Database: MongoDB (search logs & analytics)
 
 ---
 
-## Architecture
+## System Architecture
 
-The system uses a dual-database architecture:
+### Relational Database (Django ORM)
 
-**Relational DB (Django ORM)**
+Used for transactional data:
 
 * Users
 * Trains
-* Bookings
+* Bookings (tickets)
 
-**MongoDB**
+### MongoDB
 
-* Search logs
-* Route analytics
+Used for non-transactional high-volume data:
+
+* Train search logs
+* Route popularity analytics
 
 Reason:
-Transactional data requires ACID guarantees, while logging data requires high write throughput and aggregation queries.
+Transactional operations require ACID guarantees, while logging requires high write throughput and aggregation queries.
 
 ---
 
@@ -42,22 +44,22 @@ Transactional data requires ACID guarantees, while logging data requires high wr
 
 ### Authentication
 
-* Register user
-* Login user
-* JWT based authentication
-* Role based permissions (Admin/User)
+* User registration
+* User login
+* JWT token generation
+* Role based access control (Admin/User)
 
-### Train System
+### Train Management
 
-* Admin can create trains
+* Admin users can create and update trains via API
 * Users can search trains
-* Every search logged in MongoDB
+* Every search request is logged in MongoDB
 
 ### Booking System
 
-* Atomic seat booking
-* Prevents race condition using row-level locking
-* Users can view their bookings
+* Atomic seat reservation
+* Prevents overbooking using database row-level locking
+* Users can view their booking history
 
 ### Analytics
 
@@ -66,61 +68,136 @@ Transactional data requires ACID guarantees, while logging data requires high wr
 
 ---
 
-## Concurrency Handling
+## ⚠️ Important: Admin Account Required
 
-Seat booking uses:
-`select_for_update()` inside `transaction.atomic()`
+Train creation and analytics endpoints are **admin-protected APIs**.
 
-This locks the train row during booking and prevents overbooking when multiple users attempt booking simultaneously.
+Before testing the project, the reviewer must create a super admin account from the terminal.
+
+The admin account is required to:
+
+* Create trains
+* Update trains
+* Access analytics endpoints
+
+Regular users created via `/api/auth/register/` **cannot** perform these actions.
 
 ---
 
 ## Setup Instructions
 
-### 1. Clone repository
+### 1. Clone Repository
 
-```
+```bash
 git clone <repo_url>
 cd irctc_backend
 ```
 
-### 2. Create virtual environment
+### 2. Create Virtual Environment
 
-```
+```bash
 python -m venv venv
 source venv/bin/activate
 ```
 
-### 3. Install dependencies
+### 3. Install Dependencies
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment
+### 4. Configure Environment Variables
 
 Create `.env` file from template:
 
-```
+```bash
 cp .env.example .env
 ```
 
-### 5. Run migrations
+Then open `.env` and ensure:
 
 ```
+SECRET_KEY=django-insecure-irctc-project-secret
+DEBUG=True
+MONGO_URI=mongodb://localhost:27017/
+```
+
+### 5. Run Migrations
+
+```bash
 python manage.py migrate
 ```
 
-### 6. Create admin
+---
 
-```
+## 6. Create Super Admin (MANDATORY STEP)
+
+This step is required to access train creation APIs.
+
+```bash
 python manage.py createsuperuser
 ```
 
-### 7. Run server
+You will be prompted:
 
 ```
+Email:
+Name:
+Password:
+```
+
+After this, the admin user can:
+
+* Login via API
+* Obtain JWT token
+* Create trains
+
+---
+
+## 7. Run Server
+
+```bash
 python manage.py runserver
+```
+
+Server will start at:
+
+```
+http://127.0.0.1:8000
+```
+
+---
+
+## How to Obtain Admin Token
+
+Login using the admin credentials created above:
+
+**Endpoint**
+
+```
+POST /api/auth/login/
+```
+
+**Body**
+
+```json
+{
+  "email": "admin@example.com",
+  "password": "yourpassword"
+}
+```
+
+The response will contain:
+
+```
+access token
+refresh token
+```
+
+Use the `access` token in the Authorization header:
+
+```
+Authorization: Bearer <access_token>
 ```
 
 ---
@@ -132,28 +209,38 @@ python manage.py runserver
 * `POST /api/auth/register/`
 * `POST /api/auth/login/`
 
-### Trains
+### Train APIs
 
-* `POST /api/trains/` (Admin)
+* `POST /api/trains/` (Admin only)
 * `GET /api/trains/search/?source=&destination=`
 
-### Bookings
+### Booking APIs
 
 * `POST /api/bookings/`
 * `GET /api/bookings/my/`
 
-### Analytics
+### Analytics APIs
 
-* `GET /api/analytics/top-routes/` (Admin)
+* `GET /api/analytics/top-routes/` (Admin only)
 
 ---
 
-## Key Concepts Demonstrated
+## Concurrency Handling
 
-* JWT Authentication
-* Role based authorization
+Seat booking is protected using:
+
+`transaction.atomic()` + `select_for_update()`
+
+This locks the train record during booking so only one request can modify seat availability at a time, preventing overbooking when multiple users book simultaneously.
+
+---
+
+## Key Backend Concepts Demonstrated
+
+* JWT authentication
+* Role based authorization (RBAC)
 * Transaction management
-* Row-level database locking
+* Row-level locking
 * Race condition prevention
-* NoSQL analytics logging
-* Aggregation queries
+* Dual database architecture
+* MongoDB aggregation analytics
